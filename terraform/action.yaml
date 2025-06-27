@@ -1,15 +1,12 @@
 name: Terraform Run New
-description: Runs a Terraform Plan or Apply against an AWS account, supports both AWS role assumption and access key authentication
+description: Runs a Terraform Plan or Apply against an AWS account, supports access key authentication
 inputs:
-  aws_role:
-    description: 'AWS Role to assume to perform Terraform plan'
-    required: false
   aws_access_key_id:
-    description: 'AWS Access Key ID for authentication (alternative to role)'
-    required: false
+    description: 'AWS Access Key ID for authentication'
+    required: true
   aws_secret_access_key:
-    description: 'AWS Secret Access Key for authentication (alternative to role)'
-    required: false
+    description: 'AWS Secret Access Key for authentication'
+    required: true
   aws_region:
     description: 'AWS Region to perform Terraform plan'
     required: true
@@ -47,24 +44,10 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Validate AWS Authentication
-      shell: bash
-      run: |
-        if [ -z "${{ inputs.aws_role }}" ] && [ -z "${{ inputs.aws_access_key_id }}" ]; then
-          echo "Error: Either aws_role or aws_access_key_id must be provided for AWS authentication"
-          exit 1
-        fi
-        if [ -n "${{ inputs.aws_access_key_id }}" ] && [ -z "${{ inputs.aws_secret_access_key }}" ]; then
-          echo "Error: aws_secret_access_key is required when aws_access_key_id is provided"
-          exit 1
-        fi
-
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-region: ${{ inputs.aws_region }}
-        role-to-assume: ${{ inputs.aws_role }}
-        role-session-name: TerraformApplyJob
         aws-access-key-id: ${{ inputs.aws_access_key_id }}
         aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
 
