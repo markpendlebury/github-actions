@@ -1,0 +1,123 @@
+name: Terraform Run New
+description: Runs a Terraform Plan or Apply against an AWS account, supports both AWS role assumption and access key authentication
+inputs:
+  aws_role:
+    description: 'AWS Role to assume to perform Terraform plan'
+    required: false
+  aws_access_key_id:
+    description: 'AWS Access Key ID for authentication (alternative to role)'
+    required: false
+  aws_secret_access_key:
+    description: 'AWS Secret Access Key for authentication (alternative to role)'
+    required: false
+  aws_region:
+    description: 'AWS Region to perform Terraform plan'
+    required: true
+  terraform_action:
+    description: 'Terraform action to perform, options are "plan" and "apply"'
+    default: 'plan'
+    required: true
+  terraform_version:
+    description: 'Terraform Version'
+    required: true
+  tfstate_bucket:
+    description: 'The AWS S3 bucket containing the TF state file'
+    required: true
+  tf_working_dir:
+    description: 'The Terraform Directory to run in'
+    required: true
+
+outputs:
+  terraform_plan_exitcode:
+    description: "Whether changes are needed to the plan"
+    value: ${{ steps.plan.outputs.exitcode }}
+  terraform_apply_output:
+    description: "Everything output by Terraform apply"
+    value: ${{ steps.output.outputs.tf_output_json }}
+  has_changes:
+    description: "Whether changes are needed to the plan"
+    value: ${{ steps.plan.outputs.has_changes }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ inputs.aws_region }}
+        role-to-assume: ${{ inputs.aws_role }}
+        role-session-name: TerraformApplyJob
+        aws-access-key-id: ${{ inputs.aws_access_key_id }}
+        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+
+    - name: "setup-terraform"
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+
+    - name: "Terraform Backend Config"
+      id: backend
+      working-directory: ${{ inputs.tf_working_dir }}
+      shell: bash
+      run: |
+        cat > backend.conf << EOF
+        bucket="${{ inputs.tfstate_bucket }}"
+        EOF
+
+    - name: "Terraform Init"
+      id: init
+      working-directory: ${{ inputs.tf_working_dir }}
+      shell: bash
+      run: terraform init -input=false -backend-config=./backend.conf
+
+    - name: "Terraform Validate"
+      id: validate
+      working-directory: ${{ inputs.tf_working_dir }}
+      shell: bash
+      if: ${{ inputs.terraform_action == 'plan' }}
+      run: terraform validate -no-color
+
+    - name: "Terraform Plan"
+      id: plan
+      working-directory: ${{ inputs.tf_working_dir }}
+      shell: bash
+      if: ${{ inputs.terraform_action == 'plan' }}
+      run: |
+        # First generate the plan file
+        terraform plan -input=false -out=tfplan
+
+        # Now check if the plan has changes (separate step to avoid issues with output capture)
+        echo "Running terraform show to check for changes..."
+
+        PLAN_OUTPUT=$(terraform show -json tfplan | jq 'if .resource_changes then .resource_changes[].change.actions[0] else empty end')
+
+        for item in $PLAN_OUTPUT; do
+          if [ "$item" != '"no-op"' ]; then
+            change_detected=1
+          fi
+        done
+
+        # Check if we found any actions besides "no-op"
+        if [ $change_detected -eq 1 ]; then
+            echo "Changes detected in the terraform plan"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+        else
+            echo "No changes detected in the terraform plan"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: "Terraform Apply"
+      id: apply
+      working-directory: ${{ inputs.tf_working_dir }}
+      shell: bash
+      if: ${{ inputs.terraform_action == 'apply' }}
+      run: terraform apply -input=false -auto-approve
+
+    - name: "Terraform Output"
+      id: output
+      working-directory: ${{ inputs.tf_working_dir }}
+      shell: bash
+      if: ${{ inputs.terraform_action == 'apply' }}
+      run: |
+        # `terraform-bin` because: https://stackoverflow.com/questions/69925970/how-to-save-terraform-output-variable-into-a-github-action-s-environment-variabl
+        echo "tf_output_json=$(terraform-bin output -json -no-color | jq -c)" >> $GITHUB_OUTPUT
