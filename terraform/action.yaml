@@ -75,7 +75,7 @@ runs:
 
     - name: "Terraform Backend Config"
       id: backend
-      if: ${{ inputs.terraform_state_bucket != "" || inputs.terraform_state_key != "" || inputs.terraform_state_region != "" }}
+      if: ${{ inputs.terraform_state_bucket != '' || inputs.terraform_state_key != '' || inputs.terraform_state_region != '' }}
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       run: |
