@@ -29,6 +29,9 @@ inputs:
   terraform_working_dir:
     description: 'The Terraform Directory to run in'
     required: true
+  variables:
+    description: 'Comma-separated list of variables to export as TF_VAR_ environment variables'
+    required: false
 
 outputs:
   terraform_plan_exitcode:
@@ -95,6 +98,23 @@ runs:
         # Initialize change detection
         change_detected=0
 
+        # Export TF_VAR_ variables if they exist:
+        if [ "${{ inputs.variables }}" != "" ]; then
+          # split variables on a comma, remove spaces and prepend TF_VAR_ if needed then export them to the env:
+          IFS=',' read -ra VARS <<< "${{ inputs.variables }}"
+          for var in "${VARS[@]}"; do
+            # Remove leading/trailing whitespace
+            var=$(echo "$var" | xargs)
+            # Add TF_VAR_ prefix if not already present
+            if [[ "$var" != TF_VAR_* ]]; then
+              var="TF_VAR_$var"
+            fi
+            # Export the variable (assuming format is KEY=VALUE)
+            export "$var"
+            echo "Exported: $var"
+          done
+        fi
+
         # Install jq if not available
         if ! command -v jq &> /dev/null; then
           echo "jq not found, installing..."
@@ -131,7 +151,25 @@ runs:
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       if: ${{ inputs.terraform_action == 'apply' }}
-      run: terraform apply -input=false -auto-approve
+      run: |
+        # Export TF_VAR_ variables if they exist:
+        if [ "${{ inputs.variables }}" != "" ]; then
+          # split variables on a comma, remove spaces and prepend TF_VAR_ if needed then export them to the env:
+          IFS=',' read -ra VARS <<< "${{ inputs.variables }}"
+          for var in "${VARS[@]}"; do
+            # Remove leading/trailing whitespace
+            var=$(echo "$var" | xargs)
+            # Add TF_VAR_ prefix if not already present
+            if [[ "$var" != TF_VAR_* ]]; then
+              var="TF_VAR_$var"
+            fi
+            # Export the variable (assuming format is KEY=VALUE)
+            export "$var"
+            echo "Exported: $var"
+          done
+        fi
+        
+        terraform apply -input=false -auto-approve
 
     - name: "Terraform Output"
       id: output

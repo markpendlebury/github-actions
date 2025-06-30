@@ -10,6 +10,7 @@ A GitHub Action that runs Terraform plan or apply operations against AWS account
 - ✅ Change detection with structured outputs
 - ✅ Automatic dependency installation (jq)
 - ✅ Input validation and error handling
+- ✅ Support for Terraform variables via TF_VAR_ environment variables
 
 ## Inputs
 
@@ -37,6 +38,7 @@ A GitHub Action that runs Terraform plan or apply operations against AWS account
 | `terraform_state_bucket` | S3 bucket for Terraform state | - |
 | `terraform_state_key` | S3 object key/path for state file | - |
 | `terraform_state_region` | AWS region for S3 state bucket | - |
+| `variables` | Comma-separated list of variables to export as TF_VAR_ environment variables | - |
 
 ## Outputs
 
@@ -76,6 +78,20 @@ A GitHub Action that runs Terraform plan or apply operations against AWS account
     terraform_state_bucket: my-terraform-state-bucket
     terraform_state_key: production/terraform.tfstate
     terraform_state_region: us-west-2
+```
+
+### Plan with Terraform Variables
+
+```yaml
+- name: Terraform Plan
+  uses: ./path/to/terraform-action
+  with:
+    aws_role: ${{ secrets.AWS_ROLE }}
+    aws_region: us-east-1
+    terraform_version: 1.5.0
+    terraform_working_dir: ./infrastructure
+    terraform_action: plan
+    variables: "environment=production,instance_type=t3.medium,enable_monitoring=true"
 ```
 
 ### Conditional Apply Based on Plan Changes
@@ -161,6 +177,48 @@ This allows you to:
 - Override only specific backend parameters
 - Keep some settings in your Terraform config, others as secrets
 - Use different backend configurations per environment
+
+## Terraform Variables
+
+The action supports passing variables to Terraform via the `variables` input. Variables are:
+
+- Provided as a comma-separated string in `KEY=VALUE` format
+- Automatically prefixed with `TF_VAR_` if not already present
+- Exported as environment variables before running Terraform commands
+- Available to both plan and apply operations
+
+### Variable Examples
+
+```yaml
+# Simple variables
+variables: "environment=prod,region=us-east-1"
+
+# Mixed variable types
+variables: "instance_count=3,enable_ssl=true,app_name=myapp"
+
+# Variables with existing TF_VAR_ prefix (will not be double-prefixed)
+variables: "TF_VAR_custom_var=value,normal_var=value2"
+
+# Using secrets for sensitive variables
+variables: "db_password=${{ secrets.DB_PASSWORD }},api_key=${{ secrets.API_KEY }}"
+```
+
+### Variable Usage in Terraform
+
+In your Terraform configuration, declare variables as usual:
+
+```hcl
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "instance_count" {
+  description = "Number of instances"
+  type        = number
+  default     = 1
+}
+```
 
 ## Error Handling
 
