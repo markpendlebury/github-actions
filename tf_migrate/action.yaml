@@ -1,0 +1,127 @@
+name: Terraform State Migration Action
+description: Runs a terraform resource and state migration using tfmigrate.
+inputs:
+  aws_access_key_id:
+    description: 'AWS Access Key ID for authentication'
+    required: true
+  aws_secret_access_key:
+    description: 'AWS Secret Access Key for authentication'
+    required: true
+  aws_region:
+    description: 'AWS Region to perform Terraform plan'
+    required: true
+  terraform_version:
+    description: 'Terraform Version'
+    required: true
+  terraform_state_bucket:
+    description: 'The AWS S3 bucket containing the TF state file'
+    required: false
+  terraform_state_key:
+    description: 'The key/path for the state file within the S3 bucket'
+    required: false
+  terraform_state_region:
+    description: 'The AWS region for the S3 state bucket'
+    required: false
+  terraform_working_dir:
+    description: 'The Terraform Directory to run in'
+    required: true
+  tfmigrate_version:
+    description: 'The version of tfmigrate to use, default "latest"'
+    default: 'latest'
+    required: false
+  tfmigrate_file:
+    description: 'Path to the tfmigrate HCL file for state migrations'
+    required: false
+  tfmigrate_action:
+    description: 'tfmigrate action to perform: "plan" or "apply"'
+    default: 'plan'
+    required: false
+  component_directory:
+    description: 'The component directory to migrate the resources to'
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ inputs.aws_region }}
+        aws-access-key-id: ${{ inputs.aws_access_key_id }}
+        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+
+    - name: "setup-terraform"
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+
+    - name: "Install tfmigrate"
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        # Determine version
+        if [ "${{ inputs.tfmigrate_version }}" = "latest" ]; then
+          VERSION=$(curl -fsSL https://api.github.com/repos/minamijoyo/tfmigrate/releases/latest | \
+                   jq -r '.tag_name' | sed 's/^v//')
+        else
+          VERSION="${{ inputs.tfmigrate_version }}"
+        fi
+        
+        # Determine architecture
+        ARCH=$(case $(uname -m) in
+          x86_64) echo "amd64" ;;
+          aarch64) echo "arm64" ;;
+          armv7l) echo "arm" ;;
+          *) echo "unsupported"; exit 1 ;;
+        esac)
+        
+        echo "Installing tfmigrate v${VERSION} for ${ARCH}"
+        
+        # Download, extract, and install
+        DOWNLOAD_URL="https://github.com/minamijoyo/tfmigrate/releases/download/v${VERSION}/tfmigrate_${VERSION}_linux_${ARCH}.tar.gz"
+        curl -fsSL "${DOWNLOAD_URL}" | tar -xzf - tfmigrate
+        sudo install -m755 tfmigrate /usr/local/bin/tfmigrate
+        rm -f tfmigrate
+        
+        # Verify installation
+        tfmigrate version
+
+    - name: "Terraform Backend Config"
+      id: backend
+      if: ${{ inputs.terraform_state_bucket != '' || inputs.terraform_state_key != '' || inputs.terraform_state_region != '' }}
+      working-directory: ${{ inputs.terraform_working_dir }}
+      shell: bash
+      run: |
+        cat > backend.conf << EOF
+        $([ -n "${{ inputs.terraform_state_bucket }}" ] && echo 'bucket="${{ inputs.terraform_state_bucket }}"')
+        $([ -n "${{ inputs.terraform_state_key }}" ] && echo 'key="${{ inputs.terraform_state_key }}"')
+        $([ -n "${{ inputs.terraform_state_region }}" ] && echo 'region="${{ inputs.terraform_state_region }}"')
+        EOF
+
+    - name: "Terraform Init"
+      id: init
+      working-directory: ${{ inputs.terraform_working_dir }}
+      shell: bash
+      run: |
+        if [ "${{ inputs.terraform_state_bucket }}" != "" ] || [ "${{ inputs.terraform_state_key }}" != "" ] || [ "${{ inputs.terraform_state_region }}" != "" ]; then
+          terraform init -input=false -backend-config=./backend.conf
+        else
+          terraform init -input=false
+        fi
+
+    - name: "tfmigrate Plan"
+      id: tfmigrate_plan
+      working-directory: ${{ inputs.terraform_working_dir }}
+      shell: bash
+      if: ${{ inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'plan' }}
+      run: tfmigrate plan ${{ inputs.tfmigrate_file }}
+
+    - name: "tfmigrate Apply"
+      id: tfmigrate_apply
+      working-directory: ${{ inputs.terraform_working_dir }}
+      shell: bash
+      if: ${{ inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'apply' }}
+      run: tfmigrate apply ${{ inputs.tfmigrate_file }}
+      
+

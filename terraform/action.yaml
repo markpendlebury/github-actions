@@ -1,5 +1,5 @@
 name: Terraform Run New
-description: Runs a Terraform Plan or Apply against an AWS account, supports access key authentication
+description: Runs a Terraform Plan or Apply against an AWS account, supports access key authentication and tfmigrate state migrations
 inputs:
   aws_access_key_id:
     description: 'AWS Access Key ID for authentication'
@@ -32,6 +32,21 @@ inputs:
   variables:
     description: 'Comma-separated list of variables to export as TF_VAR_ environment variables'
     required: false
+  tfmigrate_enabled:
+    description: 'Enable tfmigrate state migration support'
+    default: 'false'
+    required: false
+  tfmigrate_version:
+    description: 'tfmigrate version to install'
+    default: 'latest'
+    required: false
+  tfmigrate_file:
+    description: 'Path to the tfmigrate HCL file for state migrations'
+    required: false
+  tfmigrate_action:
+    description: 'tfmigrate action to perform: "plan" or "apply"'
+    default: 'plan'
+    required: false
 
 outputs:
   terraform_plan_exitcode:
@@ -43,6 +58,12 @@ outputs:
   has_changes:
     description: "Whether changes are needed to the plan"
     value: ${{ steps.plan.outputs.has_changes }}
+  tfmigrate_plan_output:
+    description: "Output from tfmigrate plan"
+    value: ${{ steps.tfmigrate_plan.outputs.plan_output }}
+  tfmigrate_apply_output:
+    description: "Output from tfmigrate apply"
+    value: ${{ steps.tfmigrate_apply.outputs.apply_output }}
 
 runs:
   using: "composite"
@@ -58,6 +79,35 @@ runs:
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform_version }}
+
+    - name: "Install tfmigrate"
+      if: ${{ inputs.tfmigrate_enabled == 'true' }}
+      shell: bash
+      run: |
+        if [ "${{ inputs.tfmigrate_version }}" = "latest" ]; then
+          TFMIGRATE_VERSION=$(curl -s https://api.github.com/repos/minamijoyo/tfmigrate/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+        else
+          TFMIGRATE_VERSION="${{ inputs.tfmigrate_version }}"
+        fi
+        
+        echo "Installing tfmigrate version: $TFMIGRATE_VERSION"
+        
+        # Determine architecture
+        ARCH=$(uname -m)
+        case $ARCH in
+          x86_64) ARCH="amd64" ;;
+          aarch64) ARCH="arm64" ;;
+          armv7l) ARCH="arm" ;;
+        esac
+        
+        # Download and install tfmigrate
+        curl -LO "https://github.com/minamijoyo/tfmigrate/releases/download/v${TFMIGRATE_VERSION}/tfmigrate_${TFMIGRATE_VERSION}_linux_${ARCH}.tar.gz"
+        tar -xzf "tfmigrate_${TFMIGRATE_VERSION}_linux_${ARCH}.tar.gz"
+        sudo mv tfmigrate /usr/local/bin/
+        chmod +x /usr/local/bin/tfmigrate
+        
+        # Verify installation
+        tfmigrate version
 
     - name: "Terraform Backend Config"
       id: backend
@@ -88,6 +138,32 @@ runs:
       shell: bash
       if: ${{ inputs.terraform_action == 'plan' }}
       run: terraform validate -no-color
+
+    - name: "tfmigrate Plan"
+      id: tfmigrate_plan
+      working-directory: ${{ inputs.terraform_working_dir }}
+      shell: bash
+      if: ${{ inputs.tfmigrate_enabled == 'true' && inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'plan' }}
+      run: |
+        echo "Running tfmigrate plan on ${{ inputs.tfmigrate_file }}"
+        PLAN_OUTPUT=$(tfmigrate plan ${{ inputs.tfmigrate_file }} 2>&1)
+        echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+        echo "$PLAN_OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        echo "$PLAN_OUTPUT"
+
+    - name: "tfmigrate Apply"
+      id: tfmigrate_apply
+      working-directory: ${{ inputs.terraform_working_dir }}
+      shell: bash
+      if: ${{ inputs.tfmigrate_enabled == 'true' && inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'apply' }}
+      run: |
+        echo "Running tfmigrate apply on ${{ inputs.tfmigrate_file }}"
+        APPLY_OUTPUT=$(tfmigrate apply ${{ inputs.tfmigrate_file }} 2>&1)
+        echo "apply_output<<EOF" >> $GITHUB_OUTPUT
+        echo "$APPLY_OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        echo "$APPLY_OUTPUT"
 
     - name: "Terraform Plan"
       id: plan
