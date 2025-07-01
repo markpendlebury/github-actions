@@ -99,7 +99,7 @@ runs:
         $([ -n "${{ inputs.terraform_state_region }}" ] && echo 'region="${{ inputs.terraform_state_region }}"')
         EOF
 
-    - name: "Terraform Init"
+    - name: "Terraform Init Root"
       id: init
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
@@ -109,6 +109,19 @@ runs:
         else
           terraform init -input=false
         fi
+
+    - name: "Terraform Init Component"
+      id: init_component
+      working-directory: ${{ inputs.component_directory }}
+      shell: bash
+      if: ${{ inputs.component_directory != '' }}
+      run: |
+        if [ "${{ inputs.terraform_state_bucket }}" != "" ] || [ "${{ inputs.terraform_state_key }}" != "" ] || [ "${{ inputs.terraform_state_region }}" != "" ]; then
+          terraform init -input=false -backend-config=./backend.conf
+        else
+          terraform init -input=false
+        fi
+
 
     - name: "tfmigrate Plan"
       id: tfmigrate_plan
