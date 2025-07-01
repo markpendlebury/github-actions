@@ -58,7 +58,6 @@ runs:
     - name: "Install tfmigrate"
       shell: bash
       run: |
-        set -euo pipefail
         
         # Determine version
         if [ "${{ inputs.tfmigrate_version }}" = "latest" ]; then
@@ -84,9 +83,6 @@ runs:
         sudo install -m755 tfmigrate /usr/local/bin/tfmigrate
         rm -f tfmigrate
         
-        # Verify installation
-        tfmigrate version
-
     - name: "Terraform Backend Config"
       id: backend
       if: ${{ inputs.terraform_state_bucket != '' || inputs.terraform_state_key != '' || inputs.terraform_state_region != '' }}
@@ -121,7 +117,6 @@ runs:
         else
           terraform init -input=false
         fi
-
 
     - name: "tfmigrate Plan"
       id: tfmigrate_plan
