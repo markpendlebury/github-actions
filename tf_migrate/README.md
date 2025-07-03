@@ -20,7 +20,7 @@ This action is designed to:
 
 ## Usage
 
-### Basic Example
+### Basic Example (AWS Access Keys)
 
 ```yaml
 name: Terraform Migration
@@ -38,6 +38,35 @@ jobs:
         with:
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: "us-east-1"
+          terraform_version: "1.5.0"
+          terraform_working_dir: "./terraform"
+          tfmigrate_file: "./migrations/move_resources.hcl"
+          tfmigrate_action: "plan"
+```
+
+### OIDC Example
+
+```yaml
+name: Terraform Migration
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Terraform Migration
+        uses: ./
+        with:
+          role_to_assume: "arn:aws:iam::123456789012:role/github-actions-terraform-role"
+          role_session_name: "terraform-migration"
           aws_region: "us-east-1"
           terraform_version: "1.5.0"
           terraform_working_dir: "./terraform"
@@ -81,11 +110,25 @@ jobs:
 
 | Input | Description |
 |-------|-------------|
-| `aws_access_key_id` | AWS Access Key ID for authentication |
-| `aws_secret_access_key` | AWS Secret Access Key for authentication |
 | `aws_region` | AWS Region to perform Terraform operations |
 | `terraform_version` | Terraform version to install and use |
 | `terraform_working_dir` | The Terraform directory to run operations in |
+
+### Authentication Inputs
+
+**Option 1: AWS Access Keys**
+| Input | Description | Required |
+|-------|-------------|----------|
+| `aws_access_key_id` | AWS Access Key ID for authentication | Optional* |
+| `aws_secret_access_key` | AWS Secret Access Key for authentication | Optional* |
+
+**Option 2: OIDC Role Assumption**
+| Input | Description | Required |
+|-------|-------------|----------|
+| `role_to_assume` | ARN of the IAM role to assume using OIDC | Optional* |
+| `role_session_name` | Session name for the assumed role | Optional |
+
+*Either AWS Access Keys OR OIDC Role must be provided
 
 ### Optional Inputs
 
@@ -98,12 +141,13 @@ jobs:
 | `tfmigrate_file` | Path to the tfmigrate HCL file for state migrations | - |
 | `tfmigrate_action` | tfmigrate action to perform: "plan" or "apply" | `plan` |
 | `component_directory` | Component directory to migrate resources to | - |
+| `role_session_name` | Session name for the assumed role (when using OIDC) | `tf-migrate-action` |
 
 ## Workflow Steps
 
 The action performs the following steps in order:
 
-1. **Configure AWS Credentials**: Sets up AWS authentication using provided credentials
+1. **Configure AWS Credentials**: Sets up AWS authentication using either access keys or OIDC role assumption
 2. **Setup Terraform**: Installs the specified version of Terraform
 3. **Install tfmigrate**: Downloads and installs tfmigrate (supports latest or specific version)
 4. **Configure Backend**: Creates backend configuration if S3 parameters are provided
@@ -148,10 +192,11 @@ migration "state" "move_to_component_one" {
 
 ## Security Considerations
 
-- Store AWS credentials as GitHub repository secrets
-- Use least-privilege IAM policies for the AWS credentials
+- **OIDC (Recommended)**: Use OpenID Connect (OIDC) for AWS authentication instead of long-lived credentials
+- **Access Keys**: If using AWS access keys, store them as GitHub repository secrets
+- Use least-privilege IAM policies for AWS authentication
 - Always run `plan` action first to preview changes before applying
-- Consider using OpenID Connect (OIDC) for AWS authentication instead of long-lived credentials (TODO)
+- Ensure your GitHub Actions workflow has appropriate permissions when using OIDC
 
 ## Best Practices
 
