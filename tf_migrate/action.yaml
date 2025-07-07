@@ -4,13 +4,6 @@ inputs:
   aws_region:
     description: 'AWS Region to perform Terraform plan'
     required: true
-  role_to_assume:
-    description: 'ARN of the IAM role to assume using OIDC'
-    required: false
-  role_session_name:
-    description: 'Session name for the assumed role'
-    required: false
-    default: 'tf-migrate-action'
   terraform_version:
     description: 'Terraform Version'
     required: true
@@ -44,14 +37,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Configure AWS Role
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-region: ${{ inputs.aws_region }}
-        role-to-assume: ${{ inputs.role_to_assume }}
-        role-session-name: ${{ inputs.role_session_name }}
-
-
     - name: "setup-terraform"
       uses: hashicorp/setup-terraform@v3
       with:
