@@ -117,13 +117,13 @@ runs:
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       if: ${{ inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'plan' }}
-      run: tfmigrate plan ${{ inputs.tfmigrate_file }}
+      run: tfmigrate plan ${{ inputs.tfmigrate_file }} --backend-config=backend.conf
 
     - name: "tfmigrate Apply"
       id: tfmigrate_apply
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       if: ${{ inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'apply' }}
-      run: tfmigrate apply ${{ inputs.tfmigrate_file }}
+      run: tfmigrate apply ${{ inputs.tfmigrate_file }} --backend-config=backend.conf
       
 
