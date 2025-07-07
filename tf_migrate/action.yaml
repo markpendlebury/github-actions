@@ -1,12 +1,6 @@
 name: Terraform State Migration Action
 description: Runs a terraform resource and state migration using tfmigrate.
 inputs:
-  aws_access_key_id:
-    description: 'AWS Access Key ID for authentication'
-    required: false
-  aws_secret_access_key:
-    description: 'AWS Secret Access Key for authentication'
-    required: false
   aws_region:
     description: 'AWS Region to perform Terraform plan'
     required: true
@@ -50,16 +44,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Configure AWS credentials
-      if: ${{ inputs.aws_access_key_id != '' && inputs.aws_secret_access_key != '' }}
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-region: ${{ inputs.aws_region }}
-        aws-access-key-id: ${{ inputs.aws_access_key_id }}
-        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
-
     - name: Configure AWS Role
-      if: ${{ inputs.role_to_assume != '' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-region: ${{ inputs.aws_region }}
