@@ -72,14 +72,11 @@ runs:
         
     - name: "Terraform Backend Config"
       id: backend
-      if: ${{ inputs.terraform_state_bucket != '' || inputs.terraform_state_key != '' || inputs.terraform_state_region != '' }}
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       run: |
         cat > backend.conf << EOF
-        $([ -n "${{ inputs.terraform_state_bucket }}" ] && echo 'bucket="${{ inputs.terraform_state_bucket }}"')
-        $([ -n "${{ inputs.terraform_state_key }}" ] && echo 'key="${{ inputs.terraform_state_key }}"')
-        $([ -n "${{ inputs.terraform_state_region }}" ] && echo 'region="${{ inputs.terraform_state_region }}"')
+        bucket="${{ inputs.tfstate_bucket }}"
         EOF
 
     - name: "Terraform Init Root"
