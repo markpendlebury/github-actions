@@ -71,7 +71,7 @@ runs:
         rm -f tfmigrate
         
     - name: "Terraform Backend Config for Root"
-      id: backend
+      id: backend-root
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       run: |
@@ -80,7 +80,7 @@ runs:
         EOF
 
     - name: "Terraform Backend Config for Component"
-      id: backend
+      id: backend-component
       working-directory: ${{ inputs.terraform_working_dir }}/${{ inputs.component_directory }}
       shell: bash
       run: |
