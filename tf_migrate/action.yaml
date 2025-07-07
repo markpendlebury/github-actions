@@ -75,15 +75,18 @@ runs:
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       run: |
+        echo "PWD: " $PWD
         cat > backend.conf << EOF
         bucket="${{ inputs.tfstate_bucket }}"
         EOF
+        ls -la
 
     - name: "Terraform Init Root"
       id: init
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       run: |
+        echo "PWD: " $PWD
         if [ "${{ inputs.terraform_state_bucket }}" != "" ] || [ "${{ inputs.terraform_state_key }}" != "" ] || [ "${{ inputs.terraform_state_region }}" != "" ]; then
           terraform init -input=false -backend-config=./backend.conf
         else
@@ -96,6 +99,7 @@ runs:
       shell: bash
       if: ${{ inputs.component_directory != '' }}
       run: |
+        echo "PWD: " $PWD
         if [ "${{ inputs.terraform_state_bucket }}" != "" ] || [ "${{ inputs.terraform_state_key }}" != "" ] || [ "${{ inputs.terraform_state_region }}" != "" ]; then
           terraform init -input=false -backend-config=./backend.conf
         else
