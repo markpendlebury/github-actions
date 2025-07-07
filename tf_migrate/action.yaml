@@ -77,7 +77,7 @@ runs:
       run: |
         echo "PWD: " $PWD
         cat > backend.conf << EOF
-        bucket="${{ inputs.tfstate_bucket }}"
+        bucket="${{ inputs.terraform_state_bucket }}"
         EOF
         ls -la
 
