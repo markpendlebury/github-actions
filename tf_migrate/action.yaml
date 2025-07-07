@@ -48,8 +48,8 @@ runs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-region: ${{ inputs.aws_region }}
-        role_to_assume: ${{ inputs.role_to_assume }}
-        role_session_name: ${{ inputs.role_session_name }}
+        role-to-assume: ${{ inputs.role_to_assume }}
+        role-session-name: ${{ inputs.role_session_name }}
 
 
     - name: "setup-terraform"
