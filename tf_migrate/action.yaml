@@ -81,7 +81,7 @@ runs:
 
     - name: "Terraform Backend Config for Component"
       id: backend-component
-      working-directory: ${{ inputs.terraform_working_dir }}/${{ inputs.component_directory }}
+      working-directory: ${{ inputs.component_directory }}
       shell: bash
       run: |
         cat > backend.conf << EOF
