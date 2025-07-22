@@ -4,13 +4,6 @@ inputs:
   aws_region:
     description: 'AWS Region to perform Terraform plan'
     required: true
-  role_to_assume:
-    description: 'ARN of the IAM role to assume using OIDC'
-    required: false
-  role_session_name:
-    description: 'Session name for the assumed role'
-    required: false
-    default: 'tf-migrate-action'
   terraform_version:
     description: 'Terraform Version'
     required: true
@@ -40,18 +33,14 @@ inputs:
   component_directory:
     description: 'The component directory to migrate the resources to'
     required: false
+  log_level:
+    description: 'The log level to set when running tf migrate (TRACE|DEBUG|INFO|WARN|ERROR)'
+    required: false
+    default: INFO
 
 runs:
   using: "composite"
   steps:
-    - name: Configure AWS Role
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-region: ${{ inputs.aws_region }}
-        role-to-assume: ${{ inputs.role_to_assume }}
-        role-session-name: ${{ inputs.role_session_name }}
-
-
     - name: "setup-terraform"
       uses: hashicorp/setup-terraform@v3
       with:
@@ -85,17 +74,24 @@ runs:
         sudo install -m755 tfmigrate /usr/local/bin/tfmigrate
         rm -f tfmigrate
         
-    - name: "Terraform Backend Config"
-      id: backend
-      if: ${{ inputs.terraform_state_bucket != '' || inputs.terraform_state_key != '' || inputs.terraform_state_region != '' }}
+    - name: "Terraform Backend Config for Root"
+      id: backend-root
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       run: |
         cat > backend.conf << EOF
-        $([ -n "${{ inputs.terraform_state_bucket }}" ] && echo 'bucket="${{ inputs.terraform_state_bucket }}"')
-        $([ -n "${{ inputs.terraform_state_key }}" ] && echo 'key="${{ inputs.terraform_state_key }}"')
-        $([ -n "${{ inputs.terraform_state_region }}" ] && echo 'region="${{ inputs.terraform_state_region }}"')
+        bucket="${{ inputs.terraform_state_bucket }}"
         EOF
+
+    - name: "Terraform Backend Config for Component"
+      id: backend-component
+      working-directory: ${{ inputs.component_directory }}
+      shell: bash
+      run: |
+        cat > backend.conf << EOF
+        bucket="${{ inputs.terraform_state_bucket }}"
+        EOF
+
 
     - name: "Terraform Init Root"
       id: init
@@ -120,18 +116,25 @@ runs:
           terraform init -input=false
         fi
 
+    - name: "Set TFMIGRATE_LOG"
+      shell: bash
+      if: ${{ inputs.log_level != '' }}
+      run: |
+        echo "Setting TFMIGRATE_LOG=${{ inputs.log_level }}"
+        echo "TFMIGRATE_LOG=${{ inputs.log_level }}" >> $GITHUB_ENV
+
     - name: "tfmigrate Plan"
       id: tfmigrate_plan
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       if: ${{ inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'plan' }}
-      run: tfmigrate plan ${{ inputs.tfmigrate_file }}
+      run: tfmigrate plan ${{ inputs.tfmigrate_file }} --backend-config=backend.conf
 
     - name: "tfmigrate Apply"
       id: tfmigrate_apply
       working-directory: ${{ inputs.terraform_working_dir }}
       shell: bash
       if: ${{ inputs.tfmigrate_file != '' && inputs.tfmigrate_action == 'apply' }}
-      run: tfmigrate apply ${{ inputs.tfmigrate_file }}
+      run: tfmigrate apply ${{ inputs.tfmigrate_file }} --backend-config=backend.conf
       
 
