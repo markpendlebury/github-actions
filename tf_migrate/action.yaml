@@ -33,6 +33,10 @@ inputs:
   component_directory:
     description: 'The component directory to migrate the resources to'
     required: false
+  log_level:
+    description: 'The log level to set when running tf migrate (TRACE|DEBUG|INFO|WARN|ERROR)'
+    required: false
+    default: INFO
 
 runs:
   using: "composite"
@@ -111,6 +115,13 @@ runs:
         else
           terraform init -input=false
         fi
+
+    - name: "Set TFMIGRATE_LOG"
+      shell: bash
+      if: ${{ inputs.log_level != '' }}
+      run: |
+        echo "Setting TFMIGRATE_LOG=${{ inputs.log_level }}"
+        echo "TFMIGRATE_LOG=${{ inputs.log_level }}" >> $GITHUB_ENV
 
     - name: "tfmigrate Plan"
       id: tfmigrate_plan
